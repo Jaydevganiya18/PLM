@@ -1,0 +1,54 @@
+# ── Environment Files (NEVER push these) ─────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# ── Node.js (backend-node) ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ── Python (backend-ai / FastAPI) ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+pip-log.txt
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.pyc
+
+# ── React / Vite (frontend) ───────────────────────────────────────────────────
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ── OS Files ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Uploads / Media ───────────────────────────────────────────────────────────
+uploads/
