@@ -1,6 +1,3 @@
-// =============================================================================
-// backend-node/routes/reportRoutes.js
-// =============================================================================
 const express = require('express');
 const router = express.Router();
 const { Op, fn, col, literal } = require('sequelize');

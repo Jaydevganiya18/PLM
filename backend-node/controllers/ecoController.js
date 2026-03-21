@@ -507,3 +507,23 @@ exports.cloneECO = async (req, res, next) => {
     next(err);
   }
 };
+
+// =============================================================================
+// PATCH /api/ecos/:id/changes
+// Update proposed_changes while ECO is in New stage
+// =============================================================================
+exports.updateECOChanges = async (req, res, next) => {
+  try {
+    const eco = await ECO.findByPk(req.params.id);
+    if (!eco) return res.status(404).json({ error: "ECO not found" });
+    if (eco.stage !== "New") return res.status(400).json({ error: "Only New ECOs can be edited" });
+
+    // Validate payload shape optionally
+    const { proposed_changes } = req.body;
+    eco.proposed_changes = proposed_changes;
+    await eco.save();
+    res.json({ message: "Changes saved successfully", eco });
+  } catch (err) {
+    next(err);
+  }
+};

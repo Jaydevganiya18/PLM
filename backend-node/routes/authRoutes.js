@@ -1,11 +1,10 @@
-// =============================================================================
-// backend-node/routes/authRoutes.js
-// =============================================================================
+
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../db');
+const { protect } = require('../middleware/auth');
 
 const SECRET = process.env.JWT_SECRET || 'plm_logixwaveai_secret';
 
@@ -48,6 +47,17 @@ router.post('/login', async (req, res, next) => {
             token,
             user: { id: user.id, name: user.name, email: user.email, role: user.role },
         });
+  } catch (err) { next(err); }
+});
+
+// GET /api/auth/me
+router.get('/me', protect, async (req, res, next) => {
+    try {
+        const user = await User.findByPk(req.user.id, {
+            attributes: ['id', 'name', 'email', 'role']
+        });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json(user);
     } catch (err) { next(err); }
 });
 

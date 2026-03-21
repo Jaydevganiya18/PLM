@@ -48,7 +48,7 @@ async function seed() {
     // ── STEP 4: Models ────────────────────────────────────────────────────
     const User     = require('../models/User')(sequelize);
     const Product  = require('../models/Product')(sequelize);
-    const BoM      = require('../models/BOM')(sequelize);
+    const BoM      = require('../models/BoM')(sequelize);
     const ECO      = require('../models/ECO')(sequelize);
     const AuditLog = require('../models/AuditLog')(sequelize);
 

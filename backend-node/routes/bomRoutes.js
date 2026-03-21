@@ -1,6 +1,4 @@
-// =============================================================================
-// backend-node/routes/bomRoutes.js
-// =============================================================================
+
 const express = require('express');
 const router = express.Router();
 const { BoM, Product } = require('../db');
