@@ -1,74 +1,72 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, List, RefreshCw, BarChart2, LogOut, Settings } from 'lucide-react';
-import useAuthStore from '../store/authStore';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { 
+  LayoutDashboard, Package, Layers, Settings, FileText, Activity, LogOut, ArrowLeftRight 
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
-  const { user, logout } = useAuthStore();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  const links = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/products', label: 'Products', icon: Package },
-    { to: '/bom', label: 'Bills of Materials', icon: List },
-    { to: '/ecos', label: 'ECOs', icon: RefreshCw },
-    { to: '/reports', label: 'Reports', icon: BarChart2 },
-  ];
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (!user) return null;
 
   return (
-    <div className="w-64 h-screen bg-[#111827] text-gray-300 flex flex-col flex-shrink-0 relative">
-      <div className="flex items-center gap-3 p-5 text-white font-semibold text-xl tracking-tight border-b border-gray-800">
-        <div className="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center">
-          <Settings className="w-5 h-5 text-white" />
-        </div>
-        LogixWaveAI PLM
+    <div className="w-64 bg-gray-900 text-white flex flex-col h-full">
+      <div className="p-4 text-xl font-bold border-b border-gray-800 flex items-center gap-2">
+        <ArrowLeftRight className="text-blue-500" />
+        PLM / ECO
       </div>
 
-      <div className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-        Navigation
-      </div>
+      <nav className="flex-1 p-4 space-y-2">
+        <NavLink to="/" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+          <LayoutDashboard size={20} /> Dashboard
+        </NavLink>
 
-      <nav className="flex-1 px-3 space-y-1 mt-2">
-        {links.map((link) => {
-          const Icon = link.icon;
-          return (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-900/40 text-indigo-400 border-l-4 border-indigo-500'
-                    : 'hover:bg-gray-800 hover:text-white border-l-4 border-transparent'
-                }`
-              }
-            >
-              <Icon className="w-5 h-5" />
-              {link.label}
+        <NavLink to="/products" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+          <Package size={20} /> Products Master
+        </NavLink>
+
+        <NavLink to="/boms" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+          <Layers size={20} /> Bills of Materials
+        </NavLink>
+
+        {user.role !== 'OPERATIONS' && (
+          <NavLink to="/ecos" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+            <Activity size={20} /> Change Orders (ECO)
+          </NavLink>
+        )}
+
+        {user.role === 'ADMIN' && (
+          <>
+            <div className="pt-4 pb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Administration</div>
+            <NavLink to="/reports" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+              <FileText size={20} /> Reports
             </NavLink>
-          );
-        })}
+            <NavLink to="/audit-logs" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+              <Activity size={20} /> Audit Logs
+            </NavLink>
+            <NavLink to="/settings" className={({isActive}) => `flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-blue-600' : 'hover:bg-gray-800'}`}>
+              <Settings size={20} /> Settings
+            </NavLink>
+          </>
+        )}
       </nav>
 
-      {user && (
-        <div className="p-4 border-t border-gray-800 bg-gray-900 absolute bottom-0 w-full">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
-              {user.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{user.name}</p>
-              <p className="text-xs text-indigo-400 truncate">{user.role}</p>
-            </div>
-          </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
+      <div className="p-4 border-t border-gray-800">
+        <div className="mb-4">
+          <p className="text-sm font-medium">{user.name}</p>
+          <p className="text-xs text-gray-400">{user.role}</p>
         </div>
-      )}
+        <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors w-full p-2">
+          <LogOut size={18} /> Logout
+        </button>
+      </div>
     </div>
   );
 };

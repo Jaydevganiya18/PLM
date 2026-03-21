@@ -1,27 +1,29 @@
 import React from 'react';
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import Navbar from './Navbar';
-import useAuthStore from '../store/authStore';
+import { useAuth } from '../context/AuthContext';
 
 const Layout = () => {
-  const { isAuthenticated } = useAuthStore();
-  const location = useLocation();
+  const { user, loading } = useAuth();
 
-  if (!isAuthenticated && location.pathname !== '/login') {
-    return <Navigate to="/login" replace />;
-  }
+  if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
 
   return (
-    <div className="flex h-screen w-full bg-gray-50 font-sans text-gray-900 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden text-sm">
       <Sidebar />
-      <div className="flex-1 flex flex-col h-screen min-w-0">
-        <Navbar />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
-          <div className="max-w-7xl mx-auto">
-            {/* Header mapped by route can go here or inside Navbar. Leaving it in Navbar and page headers. */}
-            <Outlet />
+      <div className="flex-1 overflow-auto flex flex-col">
+        {/* Topbar can go here if needed, for now just standard spacing */}
+        <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-800">Workspace</h2>
+          <div className="flex items-center gap-4">
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+              Role: {user.role}
+            </span>
           </div>
+        </header>
+        <main className="p-6 flex-1 overflow-y-auto">
+          <Outlet />
         </main>
       </div>
     </div>

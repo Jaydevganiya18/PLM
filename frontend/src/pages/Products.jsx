@@ -1,185 +1,160 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Plus, X } from 'lucide-react';
-import api from '../utils/api';
+import React, { useEffect, useState } from 'react';
+import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import StatusBadge from '../components/StatusBadge';
+import { Plus, Search, Archive, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-const CreateProductModal = ({ onClose, onSuccess }) => {
-  const [name, setName] = useState('');
-  const [salePrice, setSalePrice] = useState('');
-  const [costPrice, setCostPrice] = useState('');
-  const [loading, setLoading] = useState(false);
+const Products = () => {
+  const { user } = useAuth();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ product_code: '', name: '', sale_price: '', cost_price: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const load = () => {
     setLoading(true);
+    api.get('/products').then(r => setProducts(r.data.data)).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = products.filter(p =>
+    p.product_code.toLowerCase().includes(search.toLowerCase()) ||
+    (p.current_version?.name || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
     try {
-      const { data } = await api.post('/products', { 
-        name, 
-        sale_price: Number(salePrice), 
-        cost_price: Number(costPrice) 
-      });
-      onSuccess(data);
-      onClose();
+      await api.post('/products', form);
+      setMsg('Product created!');
+      setShowCreate(false);
+      setForm({ product_code: '', name: '', sale_price: '', cost_price: '' });
+      load();
     } catch (err) {
-      alert("Failed to create product: " + (err.response?.data?.error || err.message));
+      setError(err.response?.data?.message || 'Error creating product');
     } finally {
-      setLoading(false);
+      setSaving(false);
+    }
+  };
+
+  const handleArchive = async (id) => {
+    if (!confirm('Archive this product?')) return;
+    try {
+      await api.patch(`/products/${id}/archive`);
+      setMsg('Product archived.');
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error archiving product');
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Create Product</h2>
-          <button onClick={onClose} className="p-1 text-gray-500 hover:bg-gray-100 rounded-md transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
-            <input 
-              type="text" 
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="e.g. Wooden Table"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price ($)</label>
-              <input 
-                type="number" 
-                required
-                min="0"
-                step="0.01"
-                value={salePrice}
-                onChange={(e) => setSalePrice(e.target.value)}
-                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price ($)</label>
-              <input 
-                type="number" 
-                required
-                min="0"
-                step="0.01"
-                value={costPrice}
-                onChange={(e) => setCostPrice(e.target.value)}
-                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 flex justify-end">
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {loading ? 'Creating...' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const Products = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await api.get('/products');
-        setProducts(res.data);
-      } catch (err) {
-        console.error("Products fetch error", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProducts();
-  }, []);
-
-  return (
-    <div className="space-y-6 max-w-[1200px]">
-      <div className="flex justify-between items-center mb-8">
+    <div>
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Products</h1>
-          <p className="text-sm text-gray-500">{products.length} active products</p>
+          <h1 className="text-2xl font-bold text-gray-900">Products Master</h1>
+          <p className="text-gray-500 text-sm mt-1">Manage product master data and version history</p>
         </div>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add Product
-        </button>
+        {user.role === 'ADMIN' && (
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={18} /> New Product
+          </button>
+        )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sale Price</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost Price</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Version</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading ? (
+      {msg && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{msg}</div>}
+      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+
+      {showCreate && user.role === 'ADMIN' && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border p-6">
+          <h3 className="text-lg font-semibold mb-4">Create New Product</h3>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Product Code</label>
+              <input required className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.product_code} onChange={e => setForm({...form, product_code: e.target.value})} placeholder="PROD-001" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input required className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Product Name" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price</label>
+              <input required type="number" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.sale_price} onChange={e => setForm({...form, sale_price: e.target.value})} placeholder="0.00" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+              <input required type="number" step="0.01" className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.cost_price} onChange={e => setForm({...form, cost_price: e.target.value})} placeholder="0.00" />
+            </div>
+            <div className="sm:col-span-2 flex gap-3">
+              <button type="submit" disabled={saving} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving...' : 'Create Product'}</button>
+              <button type="button" onClick={() => setShowCreate(false)} className="px-5 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl shadow-sm border">
+        <div className="p-4 border-b">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+            <input className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg w-full sm:w-80 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Search by code or name..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-400">Loading products...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wider">
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500 text-sm">Loading products...</td>
+                  <th className="px-4 py-3 text-left">Product Code</th>
+                  <th className="px-4 py-3 text-left">Name</th>
+                  <th className="px-4 py-3 text-left">Version</th>
+                  <th className="px-4 py-3 text-right">Sale Price</th>
+                  <th className="px-4 py-3 text-right">Cost Price</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
-              ) : products.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500 text-sm">No active products found.</td>
-                </tr>
-              ) : (
-                products.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <Package className="w-5 h-5 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-900">{product.name}</span>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan="7" className="p-8 text-center text-gray-400">No products found</td></tr>
+                ) : filtered.map(p => (
+                  <tr key={p.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono font-medium text-gray-900">{p.product_code}</td>
+                    <td className="px-4 py-3 text-gray-700">{p.current_version?.name || '-'}</td>
+                    <td className="px-4 py-3 text-gray-500">v{p.current_version?.version_no || '-'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700">${Number(p.current_version?.sale_price || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right text-gray-700">${Number(p.current_version?.cost_price || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <Link to={`/products/${p.id}`} className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium">
+                          <Eye size={14} /> View
+                        </Link>
+                        {user.role === 'ADMIN' && p.status === 'ACTIVE' && (
+                          <button onClick={() => handleArchive(p.id)} className="flex items-center gap-1 text-red-500 hover:text-red-700 text-xs font-medium">
+                            <Archive size={14} /> Archive
+                          </button>
+                        )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">${Number(product.sale_price).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">${Number(product.cost_price).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">v{product.version}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        Active
-                      </span>
-                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-
-      {showModal && (
-        <CreateProductModal 
-          onClose={() => setShowModal(false)} 
-          onSuccess={(newProduct) => {
-            setProducts([newProduct, ...products]);
-          }} 
-        />
-      )}
     </div>
   );
 };
