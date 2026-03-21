@@ -1,5 +1,7 @@
 // =============================================================================
 // backend-node/controllers/ecoController.js
+
+// sdfsdfgit d
 // Full ECO logic: getAll, getById, create, submit, approve, reject, clone
 // =============================================================================
 const axios = require("axios");
@@ -211,11 +213,9 @@ exports.submitECO = async (req, res, next) => {
     if (!eco) return res.status(404).json({ error: "ECO not found" });
 
     if (eco.stage === "Rejected")
-      return res
-        .status(400)
-        .json({
-          error: "Rejected ECOs cannot be submitted. Clone it instead.",
-        });
+      return res.status(400).json({
+        error: "Rejected ECOs cannot be submitted. Clone it instead.",
+      });
     if (eco.stage !== "New")
       return res
         .status(400)
@@ -516,7 +516,8 @@ exports.updateECOChanges = async (req, res, next) => {
   try {
     const eco = await ECO.findByPk(req.params.id);
     if (!eco) return res.status(404).json({ error: "ECO not found" });
-    if (eco.stage !== "New") return res.status(400).json({ error: "Only New ECOs can be edited" });
+    if (eco.stage !== "New")
+      return res.status(400).json({ error: "Only New ECOs can be edited" });
 
     // Validate payload shape optionally
     const { proposed_changes } = req.body;
