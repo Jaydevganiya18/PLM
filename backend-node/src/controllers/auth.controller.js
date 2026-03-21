@@ -1,42 +1,35 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const prisma = require('../lib/prisma');
+const { User, AuditLog } = require('../lib/prisma');
 
 const signup = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // Default to 'ENGINEERING' if role not provided, or reject depending on business rules.
-    // For this system, we'll allow specifying role during signup for easy testing.
     const userRole = role || 'ENGINEERING';
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'Email already exists' });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password_hash,
-        role: userRole,
-      },
+    const user = await User.create({ name, email, password_hash, role: userRole });
+
+    await AuditLog.create({
+      user_id: user.id,
+      action: 'SIGNUP',
+      affected_type: 'USER',
+      affected_id: user.id,
+      smart_summary: `User ${name} signed up as ${userRole}`,
     });
 
-    await prisma.auditLog.create({
-      data: {
-        user_id: user.id,
-        action: 'SIGNUP',
-        affected_type: 'USER',
-        affected_id: user.id,
-        smart_summary: `User ${name} signed up as ${userRole}`
-      }
-    });
-
-    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
 
     res.status(201).json({
       success: true,
@@ -51,7 +44,7 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await User.findOne({ where: { email } });
     if (!user || !user.is_active) {
       return res.status(401).json({ success: false, message: 'Invalid credentials or inactive account' });
     }
@@ -61,16 +54,18 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign(
+      { userId: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
 
-    await prisma.auditLog.create({
-      data: {
-        user_id: user.id,
-        action: 'LOGIN',
-        affected_type: 'USER',
-        affected_id: user.id,
-        smart_summary: `User ${user.name} logged in`
-      }
+    await AuditLog.create({
+      user_id: user.id,
+      action: 'LOGIN',
+      affected_type: 'USER',
+      affected_id: user.id,
+      smart_summary: `User ${user.name} logged in`,
     });
 
     res.status(200).json({
@@ -84,9 +79,9 @@ const login = async (req, res, next) => {
 
 const getMe = async (req, res, next) => {
   try {
-    const user = await prisma.user.findUnique({
+    const user = await User.findOne({
       where: { id: req.user.userId },
-      select: { id: true, name: true, email: true, role: true, is_active: true, created_at: true },
+      attributes: ['id', 'name', 'email', 'role', 'is_active', 'created_at'],
     });
 
     if (!user) {

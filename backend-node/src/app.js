@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 
+const { sequelize } = require('./db');
 const { errorHandler, notFoundHandler } = require('./middleware/error');
 
 const app = express();
@@ -31,5 +32,18 @@ app.use('/api/pdf', require('./routes/pdf.routes'));
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Connect DB and sync tables
+(async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('[DB] MySQL connected ✅');
+    await sequelize.sync({ alter: true });
+    console.log('[DB] Tables synced ✅');
+  } catch (err) {
+    console.error('[DB] Connection failed:', err.message);
+    process.exit(1);
+  }
+})();
 
 module.exports = app;

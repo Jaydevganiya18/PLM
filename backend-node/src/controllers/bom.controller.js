@@ -1,16 +1,19 @@
-const prisma = require('../lib/prisma');
+const {
+  Bom, BomVersion, BomComponent, BomOperation, Product, AuditLog, Eco, sequelize,
+} = require('../lib/prisma');
 
 const getAllBoms = async (req, res, next) => {
   try {
     const isOps = req.user.role === 'OPERATIONS';
+    const where = isOps ? { status: 'ACTIVE' } : {};
 
-    const boms = await prisma.bom.findMany({
-      where: isOps ? { status: 'ACTIVE' } : {},
-      include: {
-        product: true,
-        current_version: true
-      },
-      orderBy: { created_at: 'desc' },
+    const boms = await Bom.findAll({
+      where,
+      include: [
+        { model: Product, as: 'product' },
+        { model: BomVersion, as: 'current_version' },
+      ],
+      order: [['created_at', 'DESC']],
     });
 
     res.json({ success: true, data: boms });
@@ -24,17 +27,19 @@ const getBomById = async (req, res, next) => {
     const { id } = req.params;
     const isOps = req.user.role === 'OPERATIONS';
 
-    const bom = await prisma.bom.findUnique({
+    const bom = await Bom.findOne({
       where: { id: parseInt(id) },
-      include: { 
-        product: true,
-        current_version: {
-          include: {
-            components: { include: { component_product: true } },
-            operations: true
-          }
-        } 
-      }
+      include: [
+        { model: Product, as: 'product' },
+        {
+          model: BomVersion,
+          as: 'current_version',
+          include: [
+            { model: BomComponent, as: 'components', include: [{ model: Product, as: 'component_product' }] },
+            { model: BomOperation, as: 'operations' },
+          ],
+        },
+      ],
     });
 
     if (!bom || (isOps && bom.status !== 'ACTIVE')) {
@@ -49,68 +54,66 @@ const getBomById = async (req, res, next) => {
 
 const createBom = async (req, res, next) => {
   try {
-    // Only Admin can create directly outside ECO
     const { bom_code, product_id, components, operations } = req.body;
 
-    const existingId = await prisma.bom.findUnique({ where: { bom_code } });
+    const existingId = await Bom.findOne({ where: { bom_code } });
     if (existingId) return res.status(400).json({ success: false, message: 'BoM code already exists' });
 
-    const newBom = await prisma.$transaction(async (tx) => {
-      const b = await tx.bom.create({
-        data: {
-          bom_code,
-          product_id: parseInt(product_id),
-          created_by: req.user.userId,
-        }
-      });
+    const newBom = await sequelize.transaction(async (t) => {
+      const b = await Bom.create(
+        { bom_code, product_id: parseInt(product_id), created_by: req.user.userId },
+        { transaction: t }
+      );
 
-      const bv = await tx.bomVersion.create({
-        data: {
-          bom_id: b.id,
-          version_no: 1,
-          effective_date: new Date(),
-          created_by: req.user.userId,
-        }
-      });
+      const bv = await BomVersion.create(
+        { bom_id: b.id, version_no: 1, effective_date: new Date(), created_by: req.user.userId },
+        { transaction: t }
+      );
 
       if (components && components.length > 0) {
-        await tx.bomComponent.createMany({
-          data: components.map((c, i) => ({
+        await BomComponent.bulkCreate(
+          components.map((c, i) => ({
             bom_version_id: bv.id,
             line_no: i + 1,
             component_product_id: parseInt(c.component_product_id),
             quantity: c.quantity,
-            uom: c.uom
-          }))
-        });
+            uom: c.uom,
+          })),
+          { transaction: t }
+        );
       }
 
       if (operations && operations.length > 0) {
-        await tx.bomOperation.createMany({
-          data: operations.map((o, i) => ({
+        await BomOperation.bulkCreate(
+          operations.map((o, i) => ({
             bom_version_id: bv.id,
             line_no: i + 1,
             operation_name: o.operation_name,
             work_center: o.work_center,
-            duration_minutes: o.duration_minutes
-          }))
-        });
+            duration_minutes: o.duration_minutes,
+          })),
+          { transaction: t }
+        );
       }
 
-      const updatedB = await tx.bom.update({
+      await b.update({ current_version_id: bv.id }, { transaction: t });
+
+      await AuditLog.create(
+        {
+          user_id: req.user.userId,
+          action: 'CREATE_BOM',
+          affected_type: 'BOM',
+          affected_id: b.id,
+          smart_summary: `Created BoM ${bom_code} v1`,
+        },
+        { transaction: t }
+      );
+
+      return Bom.findOne({
         where: { id: b.id },
-        data: { current_version_id: bv.id },
-        include: { current_version: true }
+        include: [{ model: BomVersion, as: 'current_version' }],
+        transaction: t,
       });
-
-      await tx.auditLog.create({
-        data: {
-          user_id: req.user.userId, action: 'CREATE_BOM', affected_type: 'BOM', affected_id: b.id,
-          smart_summary: `Created BoM ${bom_code} v1`
-        }
-      });
-
-      return updatedB;
     });
 
     res.status(201).json({ success: true, data: newBom });
@@ -120,50 +123,55 @@ const createBom = async (req, res, next) => {
 };
 
 const updateBomDirect = async (req, res, next) => {
-  // Directly replacing components and operations for the current active version (Admin only)
   try {
     const { id } = req.params;
     const { components, operations } = req.body;
 
-    const bom = await prisma.bom.findUnique({ where: { id: parseInt(id) } });
-    if (!bom || !bom.current_version_id) return res.status(404).json({ success: false, message: 'BoM not found' });
+    const bom = await Bom.findOne({ where: { id: parseInt(id) } });
+    if (!bom || !bom.current_version_id) {
+      return res.status(404).json({ success: false, message: 'BoM not found' });
+    }
 
-    await prisma.$transaction(async (tx) => {
-      // Delete existing
-      await tx.bomComponent.deleteMany({ where: { bom_version_id: bom.current_version_id } });
-      await tx.bomOperation.deleteMany({ where: { bom_version_id: bom.current_version_id } });
+    await sequelize.transaction(async (t) => {
+      await BomComponent.destroy({ where: { bom_version_id: bom.current_version_id }, transaction: t });
+      await BomOperation.destroy({ where: { bom_version_id: bom.current_version_id }, transaction: t });
 
-      // Insert new
       if (components && components.length > 0) {
-        await tx.bomComponent.createMany({
-          data: components.map((c, i) => ({
+        await BomComponent.bulkCreate(
+          components.map((c, i) => ({
             bom_version_id: bom.current_version_id,
             line_no: i + 1,
             component_product_id: parseInt(c.component_product_id),
             quantity: c.quantity,
-            uom: c.uom
-          }))
-        });
+            uom: c.uom,
+          })),
+          { transaction: t }
+        );
       }
 
       if (operations && operations.length > 0) {
-        await tx.bomOperation.createMany({
-          data: operations.map((o, i) => ({
+        await BomOperation.bulkCreate(
+          operations.map((o, i) => ({
             bom_version_id: bom.current_version_id,
             line_no: i + 1,
             operation_name: o.operation_name,
             work_center: o.work_center,
-            duration_minutes: o.duration_minutes
-          }))
-        });
+            duration_minutes: o.duration_minutes,
+          })),
+          { transaction: t }
+        );
       }
 
-      await tx.auditLog.create({
-        data: {
-          user_id: req.user.userId, action: 'UPDATE_BOM_DIRECT', affected_type: 'BOM', affected_id: bom.id,
-          smart_summary: `Admin directly updated BoM ${bom.bom_code}`
-        }
-      });
+      await AuditLog.create(
+        {
+          user_id: req.user.userId,
+          action: 'UPDATE_BOM_DIRECT',
+          affected_type: 'BOM',
+          affected_id: bom.id,
+          smart_summary: `Admin directly updated BoM ${bom.bom_code}`,
+        },
+        { transaction: t }
+      );
     });
 
     res.json({ success: true, message: 'BoM updated directly' });
@@ -176,30 +184,35 @@ const archiveBom = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const b = await tx.bom.update({
-        where: { id: parseInt(id) },
-        data: { status: 'ARCHIVED', archived_at: new Date() }
-      });
+    const result = await sequelize.transaction(async (t) => {
+      await Bom.update(
+        { status: 'ARCHIVED', archived_at: new Date() },
+        { where: { id: parseInt(id) }, transaction: t }
+      );
+      const b = await Bom.findOne({ where: { id: parseInt(id) }, transaction: t });
 
       if (b.current_version_id) {
-        await tx.bomVersion.update({
-          where: { id: b.current_version_id },
-          data: { status: 'ARCHIVED', archived_at: new Date() }
-        });
+        await BomVersion.update(
+          { status: 'ARCHIVED', archived_at: new Date() },
+          { where: { id: b.current_version_id }, transaction: t }
+        );
       }
 
-      await tx.auditLog.create({
-        data: {
-          user_id: req.user.userId, action: 'ARCHIVE_BOM', affected_type: 'BOM', affected_id: b.id,
-          smart_summary: `Archived BoM ${b.bom_code}`
-        }
-      });
+      await AuditLog.create(
+        {
+          user_id: req.user.userId,
+          action: 'ARCHIVE_BOM',
+          affected_type: 'BOM',
+          affected_id: b.id,
+          smart_summary: `Archived BoM ${b.bom_code}`,
+        },
+        { transaction: t }
+      );
 
       return b;
     });
 
-    res.json({ success: true, data: updated });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -208,12 +221,12 @@ const archiveBom = async (req, res, next) => {
 const getBomVersions = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const versions = await prisma.bomVersion.findMany({
+    const versions = await BomVersion.findAll({
       where: { bom_id: parseInt(id) },
-      orderBy: { version_no: 'desc' },
-      include: {
-        created_via_eco: { select: { eco_number: true, title: true } }
-      }
+      order: [['version_no', 'DESC']],
+      include: [
+        { model: Eco, as: 'created_via_eco', attributes: ['eco_number', 'title'] },
+      ],
     });
     res.json({ success: true, data: versions });
   } catch (err) {
@@ -224,10 +237,10 @@ const getBomVersions = async (req, res, next) => {
 const getBomVersionComponents = async (req, res, next) => {
   try {
     const { versionId } = req.params;
-    const components = await prisma.bomComponent.findMany({
+    const components = await BomComponent.findAll({
       where: { bom_version_id: parseInt(versionId) },
-      include: { component_product: true },
-      orderBy: { line_no: 'asc' }
+      include: [{ model: Product, as: 'component_product' }],
+      order: [['line_no', 'ASC']],
     });
     res.json({ success: true, data: components });
   } catch (err) {
@@ -238,9 +251,9 @@ const getBomVersionComponents = async (req, res, next) => {
 const getBomVersionOperations = async (req, res, next) => {
   try {
     const { versionId } = req.params;
-    const operations = await prisma.bomOperation.findMany({
+    const operations = await BomOperation.findAll({
       where: { bom_version_id: parseInt(versionId) },
-      orderBy: { line_no: 'asc' }
+      order: [['line_no', 'ASC']],
     });
     res.json({ success: true, data: operations });
   } catch (err) {
@@ -250,5 +263,5 @@ const getBomVersionOperations = async (req, res, next) => {
 
 module.exports = {
   getAllBoms, getBomById, createBom, updateBomDirect, archiveBom, getBomVersions,
-  getBomVersionComponents, getBomVersionOperations
+  getBomVersionComponents, getBomVersionOperations,
 };

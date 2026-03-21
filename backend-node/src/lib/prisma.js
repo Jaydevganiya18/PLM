@@ -1,7 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
-
-module.exports = prisma;
+// This file replaces src/lib/prisma.js
+// It re-exports the Sequelize db module so all controllers that previously
+// imported from '../lib/prisma' now get the Sequelize models.
+module.exports = require('../db');

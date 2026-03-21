@@ -1,34 +1,40 @@
-const prisma = require('../lib/prisma');
+const {
+  Eco, Product, ProductVersion, ProductAttachment, Bom, BomVersion, BomComponent, BomOperation, AuditLog, sequelize,
+} = require('../lib/prisma');
 
 /**
  * Capture a snapshot of the active product or BoM version.
  */
 const captureSnapshot = async (ecoType, productId, bomId) => {
   if (ecoType === 'PRODUCT') {
-    const p = await prisma.product.findUnique({
+    const p = await Product.findOne({
       where: { id: productId },
-      include: {
-        current_version: {
-          include: { attachments: true }
-        }
-      }
+      include: [
+        {
+          model: ProductVersion,
+          as: 'current_version',
+          include: [{ model: ProductAttachment, as: 'attachments' }],
+        },
+      ],
     });
-    if (!p || !p.current_version) throw new Error("No active product version to snapshot");
-    return p.current_version;
+    if (!p || !p.current_version) throw new Error('No active product version to snapshot');
+    return p.current_version.toJSON();
   } else if (ecoType === 'BOM') {
-    const b = await prisma.bom.findUnique({
+    const b = await Bom.findOne({
       where: { id: bomId },
-      include: {
-        current_version: {
-          include: {
-            components: true,
-            operations: true
-          }
-        }
-      }
+      include: [
+        {
+          model: BomVersion,
+          as: 'current_version',
+          include: [
+            { model: BomComponent, as: 'components' },
+            { model: BomOperation, as: 'operations' },
+          ],
+        },
+      ],
     });
-    if (!b || !b.current_version) throw new Error("No active BoM version to snapshot");
-    return b.current_version;
+    if (!b || !b.current_version) throw new Error('No active BoM version to snapshot');
+    return b.current_version.toJSON();
   }
 };
 
@@ -36,26 +42,29 @@ const captureSnapshot = async (ecoType, productId, bomId) => {
  * Apply the ECO changes to the master data
  */
 const applyEcoChanges = async (ecoId, userId) => {
-  const eco = await prisma.eco.findUnique({ where: { id: ecoId } });
-  if (!eco) throw new Error("ECO not found");
+  const eco = await Eco.findOne({ where: { id: ecoId } });
+  if (!eco) throw new Error('ECO not found');
 
   const proposed = eco.proposed_changes;
 
-  await prisma.$transaction(async (tx) => {
+  await sequelize.transaction(async (t) => {
     if (eco.eco_type === 'PRODUCT') {
       if (eco.version_update) {
-        // Create new version
-        const lastVersion = await tx.productVersion.findUnique({ where: { id: eco.source_product_version_id } });
-        
-        // Archive old version
-        await tx.productVersion.update({
-          where: { id: lastVersion.id },
-          data: { status: 'ARCHIVED', archived_at: new Date() }
+        // Get the source version
+        const lastVersion = await ProductVersion.findOne({
+          where: { id: eco.source_product_version_id },
+          transaction: t,
         });
 
-        // New version
-        const newV = await tx.productVersion.create({
-          data: {
+        // Archive old version
+        await ProductVersion.update(
+          { status: 'ARCHIVED', archived_at: new Date() },
+          { where: { id: lastVersion.id }, transaction: t }
+        );
+
+        // Create new version
+        const newV = await ProductVersion.create(
+          {
             product_id: eco.product_id,
             version_no: lastVersion.version_no + 1,
             name: proposed.name,
@@ -63,140 +72,154 @@ const applyEcoChanges = async (ecoId, userId) => {
             cost_price: proposed.cost_price,
             effective_date: eco.effective_date || new Date(),
             created_via_eco_id: eco.id,
-            created_by: userId
-          }
-        });
+            created_by: userId,
+          },
+          { transaction: t }
+        );
 
-        // Copy attachments (simplified logic: ideally would duplicate paths or reference same S3)
-        // Here we just duplicate DB records
+        // Copy attachments
         if (proposed.attachments && proposed.attachments.length > 0) {
-          await tx.productAttachment.createMany({
-            data: proposed.attachments.map(a => ({
+          await ProductAttachment.bulkCreate(
+            proposed.attachments.map((a) => ({
               product_version_id: newV.id,
               file_name: a.file_name,
               file_url: a.file_url,
-              uploaded_by: userId
-            }))
-          });
+              uploaded_by: userId,
+            })),
+            { transaction: t }
+          );
         }
 
-        // Update product 
-        await tx.product.update({
-          where: { id: eco.product_id },
-          data: { current_version_id: newV.id }
-        });
+        // Update product current_version_id
+        await Product.update(
+          { current_version_id: newV.id },
+          { where: { id: eco.product_id }, transaction: t }
+        );
       } else {
         // Update same version
-        await tx.productVersion.update({
-          where: { id: eco.source_product_version_id },
-          data: {
+        await ProductVersion.update(
+          {
             name: proposed.name,
             sale_price: proposed.sale_price,
             cost_price: proposed.cost_price,
-            effective_date: eco.effective_date
-          }
-        });
-        
+            effective_date: eco.effective_date,
+          },
+          { where: { id: eco.source_product_version_id }, transaction: t }
+        );
+
         // Attachment logic: Delete all, recreate
-        await tx.productAttachment.deleteMany({ where: { product_version_id: eco.source_product_version_id }});
+        await ProductAttachment.destroy({
+          where: { product_version_id: eco.source_product_version_id },
+          transaction: t,
+        });
         if (proposed.attachments && proposed.attachments.length > 0) {
-          await tx.productAttachment.createMany({
-            data: proposed.attachments.map(a => ({
+          await ProductAttachment.bulkCreate(
+            proposed.attachments.map((a) => ({
               product_version_id: eco.source_product_version_id,
               file_name: a.file_name,
               file_url: a.file_url,
-              uploaded_by: userId
-            }))
-          });
+              uploaded_by: userId,
+            })),
+            { transaction: t }
+          );
         }
       }
 
     } else if (eco.eco_type === 'BOM') {
       if (eco.version_update) {
-        const lastVersion = await tx.bomVersion.findUnique({ where: { id: eco.source_bom_version_id } });
-        
-        await tx.bomVersion.update({
-          where: { id: lastVersion.id },
-          data: { status: 'ARCHIVED', archived_at: new Date() }
+        const lastVersion = await BomVersion.findOne({
+          where: { id: eco.source_bom_version_id },
+          transaction: t,
         });
 
-        const newV = await tx.bomVersion.create({
-          data: {
+        await BomVersion.update(
+          { status: 'ARCHIVED', archived_at: new Date() },
+          { where: { id: lastVersion.id }, transaction: t }
+        );
+
+        const newV = await BomVersion.create(
+          {
             bom_id: eco.bom_id,
             version_no: lastVersion.version_no + 1,
             effective_date: eco.effective_date || new Date(),
             created_via_eco_id: eco.id,
-            created_by: userId
-          }
-        });
+            created_by: userId,
+          },
+          { transaction: t }
+        );
 
         if (proposed.components?.length > 0) {
-          await tx.bomComponent.createMany({
-            data: proposed.components.map((c, i) => ({
+          await BomComponent.bulkCreate(
+            proposed.components.map((c, i) => ({
               bom_version_id: newV.id,
               line_no: i + 1,
               component_product_id: parseInt(c.component_product_id),
               quantity: c.quantity,
-              uom: c.uom
-            }))
-          });
+              uom: c.uom,
+            })),
+            { transaction: t }
+          );
         }
 
         if (proposed.operations?.length > 0) {
-          await tx.bomOperation.createMany({
-            data: proposed.operations.map((o, i) => ({
+          await BomOperation.bulkCreate(
+            proposed.operations.map((o, i) => ({
               bom_version_id: newV.id,
               line_no: i + 1,
               operation_name: o.operation_name,
               work_center: o.work_center,
-              duration_minutes: o.duration_minutes
-            }))
-          });
+              duration_minutes: o.duration_minutes,
+            })),
+            { transaction: t }
+          );
         }
 
-        await tx.bom.update({
-          where: { id: eco.bom_id },
-          data: { current_version_id: newV.id }
-        });
+        await Bom.update(
+          { current_version_id: newV.id },
+          { where: { id: eco.bom_id }, transaction: t }
+        );
       } else {
         // Update same version
-        await tx.bomComponent.deleteMany({ where: { bom_version_id: eco.source_bom_version_id } });
-        await tx.bomOperation.deleteMany({ where: { bom_version_id: eco.source_bom_version_id } });
+        await BomComponent.destroy({ where: { bom_version_id: eco.source_bom_version_id }, transaction: t });
+        await BomOperation.destroy({ where: { bom_version_id: eco.source_bom_version_id }, transaction: t });
 
         if (proposed.components?.length > 0) {
-          await tx.bomComponent.createMany({
-            data: proposed.components.map((c, i) => ({
+          await BomComponent.bulkCreate(
+            proposed.components.map((c, i) => ({
               bom_version_id: eco.source_bom_version_id,
               line_no: i + 1,
               component_product_id: parseInt(c.component_product_id),
               quantity: c.quantity,
-              uom: c.uom
-            }))
-          });
+              uom: c.uom,
+            })),
+            { transaction: t }
+          );
         }
 
         if (proposed.operations?.length > 0) {
-          await tx.bomOperation.createMany({
-            data: proposed.operations.map((o, i) => ({
+          await BomOperation.bulkCreate(
+            proposed.operations.map((o, i) => ({
               bom_version_id: eco.source_bom_version_id,
               line_no: i + 1,
               operation_name: o.operation_name,
               work_center: o.work_center,
-              duration_minutes: o.duration_minutes
-            }))
-          });
+              duration_minutes: o.duration_minutes,
+            })),
+            { transaction: t }
+          );
         }
       }
     }
-
   }); // end transaction
 
   // Audit log outside transaction (non-critical)
-  await prisma.auditLog.create({
-    data: {
-      user_id: userId, action: 'APPLY_ECO', affected_type: 'ECO', affected_id: ecoId, eco_id: ecoId,
-      smart_summary: `Applied ECO ${eco.eco_number} changes to master data`
-    }
+  await AuditLog.create({
+    user_id: userId,
+    action: 'APPLY_ECO',
+    affected_type: 'ECO',
+    affected_id: ecoId,
+    eco_id: ecoId,
+    smart_summary: `Applied ECO ${eco.eco_number} changes to master data`,
   }).catch(() => {}); // log failures silently
 };
 
