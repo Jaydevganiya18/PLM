@@ -1,7 +1,8 @@
 // =============================================================================
 // backend-node/seeders/seed.js
 // node seeders/seed.js
-// AUTO creates database if not exists → tables → data
+// AUTO creates database if not ex
+//ssdfdsfsists → tables → data
 // MySQL me manually kuch karne ki zarurat NAHI
 // =============================================================================
 require('dotenv').config();
