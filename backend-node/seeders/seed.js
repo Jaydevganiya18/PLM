@@ -82,10 +82,10 @@ async function seed() {
     console.log('👤 Users seed kar raha hu...');
     const hash = await bcrypt.hash('password123', 10);
     const [fack, jay, pal, yashvi] = await User.bulkCreate([
-      { name: 'Fack Shah',    email: 'fack@logixwaveai.com',   password: hash, role: 'Admin'       },
-      { name: 'Jay Patel',    email: 'jay@logixwaveai.com',    password: hash, role: 'Engineering' },
-      { name: 'Pal Mehta',    email: 'pal@logixwaveai.com',    password: hash, role: 'Approver'    },
-      { name: 'Yashvi Desai', email: 'yashvi@logixwaveai.com', password: hash, role: 'Operations'  },
+      { name: 'Parth Kachariya', email: 'parth@logixwaveai.com', password: hash, role: 'Admin'       }, // TODO: Change password to 'password123' before commit Shah',    email: 'fack@logixwaveai.com',   password: hash, role: 'Admin'       },
+      { name: 'Jay Devganiya',    email: 'jay@logixwaveai.com',    password: hash, role: 'Engineering' },
+      { name: 'Pal Kaswala',    email: 'pal@logixwaveai.com',    password: hash, role: 'Approver'    },
+      { name: 'Yashvi Nakrani', email: 'yashvi@logixwaveai.com', password: hash, role: 'Operations'  },
     ]);
     console.log('✅ 4 users seeded\n');
 
