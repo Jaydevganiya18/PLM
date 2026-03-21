@@ -229,7 +229,7 @@ const EcoDetail = () => {
     }
   };
 
-  if (!eco) return <div className="p-8 text-center text-gray-400">Loading ECO...</div>;
+  if (!eco || !user) return <div className="p-8 text-center text-gray-400">Loading ECO details...</div>;
 
   const isAdmin = user.role === 'ADMIN';
   const isEng = user.role === 'ENGINEERING';
@@ -238,6 +238,9 @@ const EcoDetail = () => {
   const isRejected = eco.status === 'REJECTED';
   const isInProgress = eco.status === 'IN_PROGRESS';
   const isEditable = (isDraft || isRejected) && (isAdmin || isEng);
+  
+  // A stage allows Approval/Reject IF approval_required is true
+  // OR IF the user is an ADMIN (Admins can override/validate any step)
   const stageApprovalRequired = eco.current_stage?.approval_required;
 
   return (
@@ -269,28 +272,59 @@ const EcoDetail = () => {
       )}
 
       {/* Workflow Action Bar */}
-      <div className="bg-white rounded-xl shadow-sm border p-4 mb-6 flex flex-wrap gap-2">
-        <span className="text-sm text-gray-500 self-center mr-2">Actions:</span>
-        {(isDraft || isRejected) && (isAdmin || isEng) && (
-          <button onClick={() => doAction('start')} className="flex items-center gap-1 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-            <Play size={14} /> Start ECO
-          </button>
-        )}
-        {isInProgress && !stageApprovalRequired && (isAdmin || isApprover || isEng) && (
-          <button onClick={() => doAction('validate')} className="flex items-center gap-1 px-4 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">
-            <ClipboardCheck size={14} /> Validate
-          </button>
-        )}
-        {isInProgress && stageApprovalRequired && (isAdmin || isApprover) && (
-          <>
-            <button onClick={() => doAction('approve', { comment: 'Approved' })} className="flex items-center gap-1 px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
-              <CheckCircle size={14} /> Approve
+      <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
+        <div className="flex items-center justify-between mb-4 pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <ClipboardCheck size={20} />
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase">Current Stage</p>
+              <p className="font-bold text-gray-900">{eco.current_stage?.name || 'Initialization'}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-semibold text-gray-400 uppercase">Required Action</p>
+            <p className="font-medium text-gray-700">
+              {stageApprovalRequired ? 'Multi-party Approval' : 'Stage Validation'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* START Action */}
+          {(isDraft || isRejected) && (isAdmin || isEng) && (
+            <button onClick={() => doAction('start')} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all shadow-sm hover:shadow-md">
+              <Play size={16} /> Start Workflow
             </button>
-            <button onClick={() => setShowReject(true)} className="flex items-center gap-1 px-4 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
-              <XCircle size={14} /> Reject
+          )}
+
+          {/* VALIDATE Action */}
+          {isInProgress && !stageApprovalRequired && (isAdmin || isApprover || isEng) && (
+            <button onClick={() => doAction('validate')} className="flex items-center gap-2 px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-all shadow-sm hover:shadow-md">
+              <ClipboardCheck size={16} /> Validate & Continue
             </button>
-          </>
-        )}
+          )}
+
+          {/* APPROVE/REJECT Actions */}
+          {isInProgress && stageApprovalRequired && (isAdmin || isApprover) && (
+            <div className="flex gap-2">
+              <button onClick={() => doAction('approve', { comment: 'Approved' })} className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-all shadow-sm hover:shadow-md">
+                <CheckCircle size={16} /> Approve Changes
+              </button>
+              <button onClick={() => setShowReject(true)} className="flex items-center gap-2 px-5 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition-all shadow-sm hover:shadow-md">
+                <XCircle size={16} /> Reject ECO
+              </button>
+            </div>
+          )}
+
+          {!isEditable && !isInProgress && (
+            <div className="flex items-center gap-2 text-gray-400 italic text-sm py-2">
+              <div className="w-2 h-2 rounded-full bg-gray-300" />
+              This ECO has been completed or cancelled. No further actions required.
+            </div>
+          )}
+        </div>
       </div>
 
       {showReject && (
