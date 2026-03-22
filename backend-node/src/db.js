@@ -1,7 +1,4 @@
-// =============================================================================
-// backend-node/src/db.js
-// Sequelize instance + all models + all associations
-// =============================================================================
+
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 

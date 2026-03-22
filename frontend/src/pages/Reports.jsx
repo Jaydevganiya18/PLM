@@ -145,8 +145,8 @@ const Reports = () => {
                       <td className="px-4 py-3 font-bold">v{v.version_no}</td>
                       <td className="px-4 py-3 font-mono text-xs">{v.bom?.product?.product_code}</td>
                       <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
-                      <td className="px-4 py-3">{v._count?.components ?? 0}</td>
-                      <td className="px-4 py-3">{v._count?.operations ?? 0}</td>
+                      <td className="px-4 py-3">{v.components?.length || 0}</td>
+                      <td className="px-4 py-3">{v.operations?.length || 0}</td>
                       <td className="px-4 py-3 text-gray-500">{v.created_via_eco?.eco_number|| '-'}</td>
                     </tr>
                   ))}
@@ -187,9 +187,9 @@ const Reports = () => {
                 <tbody className="divide-y divide-gray-100">
                   {data.map(p => (
                     <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono">{p.product_code}</td>
+                      <td className="px-4 py-3">{p.product_code}</td>
                       <td className="px-4 py-3">v{p.current_version?.version_no} - {p.current_version?.name}</td>
-                      <td className="px-4 py-3">{p.boms.map(b => `${b.bom_code} v${b.current_version?.version_no}`).join(', ') || '-'}</td>
+                      <td className="px-4 py-3">{(p.boms || []).map(b => `${b.bom_code} v${b.current_version?.version_no}`).join(', ') || '-'}</td>
                     </tr>
                   ))}
                 </tbody>

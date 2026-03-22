@@ -6,7 +6,7 @@ const getEcoReport = async (req, res, next) => {
   try {
     const ecos = await Eco.findAll({
       include: [
-        { model: Product, as: 'product', attributes: ['product_code', 'name'] },
+        { model: Product, as: 'product', attributes: ['product_code'] },
         { model: Bom, as: 'bom', attributes: ['bom_code'] },
         { model: EcoStage, as: 'current_stage', attributes: ['name'] },
         { model: User, as: 'requester', attributes: ['name'] },
@@ -48,6 +48,8 @@ const getBomChangeHistory = async (req, res, next) => {
           include: [{ model: Product, as: 'product', attributes: ['product_code'] }],
         },
         { model: Eco, as: 'created_via_eco', attributes: ['eco_number'] },
+        { model: BomComponent, as: 'components', attributes: ['id'] },
+        { model: BomOperation, as: 'operations', attributes: ['id'] },
       ],
       order: [
         ['bom_id', 'ASC'],
