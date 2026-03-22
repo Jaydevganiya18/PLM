@@ -8,6 +8,8 @@ import Layout from './components/Layout';
 // Public Pages
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Protected Pages
 import Dashboard from './pages/Dashboard';
@@ -46,6 +48,8 @@ function App() {
           {/* Public */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
           {/* Protected Layout */}
           <Route path="/" element={<Layout />}>

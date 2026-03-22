@@ -11,6 +11,8 @@ module.exports = (sequelize) =>
       allowNull: false,
     },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    reset_token: { type: DataTypes.STRING(255), allowNull: true },
+    reset_token_expires: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE },
   }, {

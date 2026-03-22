@@ -63,16 +63,15 @@ async function seed() {
     console.log('🔧 Creating ECO stages...');
     const stages = await EcoStage.bulkCreate([
       { name: 'Engineering Review', sequence_no: 1, approval_required: false, is_start_stage: true,  is_final_stage: false, is_active: true, created_by: admin.id },
-      { name: 'Approval',           sequence_no: 2, approval_required: true,  is_start_stage: false, is_final_stage: false, is_active: true, created_by: admin.id },
-      { name: 'Final Validation',   sequence_no: 3, approval_required: false, is_start_stage: false, is_final_stage: true,  is_active: true, created_by: admin.id },
+      { name: 'Approval',           sequence_no: 2, approval_required: true,  is_start_stage: false, is_final_stage: true, is_active: true, created_by: admin.id },
     ]);
-    const [stageReview, stageApproval, stageFinal] = stages;
+    const [stageReview, stageApproval] = stages;
+    const stageFinal = stageApproval; // Map final stage references to Approval
 
     await ApprovalRule.bulkCreate([
       { stage_id: stageApproval.id, approver_role: 'APPROVER', min_approvals: 1, is_active: true },
-      { stage_id: stageApproval.id, approver_role: 'ADMIN',    min_approvals: 1, is_active: true },
     ]);
-    console.log(`   3 stages + approval rules ✅`);
+    console.log(`   2 stages + 1 approval rule ✅`);
 
     // ── 4. PRODUCTS (160 products) ───────────────────
     console.log('📦 Creating 160 products (~400 versions)...');

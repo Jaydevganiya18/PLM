@@ -49,13 +49,18 @@ const Login = () => {
                 type="email"
                 required
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="admin@example.com"
+                placeholder="admin@plm.com"
                 value={form.email}
                 onChange={e => setForm({...form, email: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:underline">
+                  Forgot your password?
+                </Link>
+              </div>
               <input
                 type="password"
                 required
@@ -76,10 +81,10 @@ const Login = () => {
 
           <div className="mt-6 p-4 bg-gray-50 rounded-lg text-xs text-gray-600 space-y-1">
             <p className="font-semibold text-gray-700 mb-2">Test Credentials:</p>
-            <p>Admin: admin@example.com / password123</p>
-            <p>Engineering: eng@example.com / password123</p>
-            <p>Approver: approver@example.com / password123</p>
-            <p>Ops: ops@example.com / password123</p>
+            <p>Admin: admin@plm.com / password123</p>
+            <p>Engineering: eng1@plm.com / password123</p>
+            <p>Approver: approver1@plm.com / password123</p>
+            <p>Ops: ops1@plm.com / password123</p>
           </div>
 
           <p className="text-center mt-4 text-sm text-gray-600">
